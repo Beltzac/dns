@@ -17,6 +17,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Topshelf;
 
 namespace beltzac.dns
 {
@@ -1763,62 +1764,90 @@ namespace beltzac.dns
 4.0.0.53
 107.191.48.176";
 
-          var dnss = list.Split('\n').Select(i => i.Trim()).Where(i => IPAddress.TryParse(i, out _)).ToList();
-                
-                
-             //   new List<string>();
-             //dnss.Add("8.8.8.8");
-             //dnss.Add("8.8.4.4");
-             //dnss.Add("9.9.9.9");
-             //dnss.Add("149.112.112.112");
-             //dnss.Add("208.67.222.222");
-             //dnss.Add("208.67.220.220");
-             //dnss.Add("1.1.1.1");
-             //dnss.Add("1.0.0.1");
-             //dnss.Add("185.228.168.9");
-             //dnss.Add("185.228.169.9");
-             //dnss.Add("76.76.19.19");
-             //dnss.Add("76.223.122.150");
-             //dnss.Add("94.140.14.14");
-             //dnss.Add("94.140.15.15");
+            var dnss = list.Split('\n').Select(i => i.Trim()).Where(i => IPAddress.TryParse(i, out _)).ToList();
+
+
+            //   new List<string>();
+            //dnss.Add("8.8.8.8");
+            //dnss.Add("8.8.4.4");
+            //dnss.Add("9.9.9.9");
+            //dnss.Add("149.112.112.112");
+            //dnss.Add("208.67.222.222");
+            //dnss.Add("208.67.220.220");
+            //dnss.Add("1.1.1.1");
+            //dnss.Add("1.0.0.1");
+            //dnss.Add("185.228.168.9");
+            //dnss.Add("185.228.169.9");
+            //dnss.Add("76.76.19.19");
+            //dnss.Add("76.223.122.150");
+            //dnss.Add("94.140.14.14");
+            //dnss.Add("94.140.15.15");
 
 
 
 
             var resolvers = new List<IRequestResolver>();
 
-            foreach(string d in dnss)
+            foreach (string d in dnss)
             {
                 resolvers.Add(new LogResolver(new IPEndPoint(IPAddress.Parse(d), 53)));
             }
 
             FastestResolver fastestResolver = new FastestResolver(resolvers.ToArray());
 
-            DnsServer server = new DnsServer(new CacheResolver(fastestResolver));
+            //DnsServer server = new DnsServer(new CacheResolver(fastestResolver));
+
+
+            var rc = HostFactory.Run(x =>                                   //1
+            {
+                x.Service<DnsServer>(s =>                                   //2
+                {
+                    s.ConstructUsing(name => new DnsServer(new CacheResolver(fastestResolver)));                //3
+                    s.WhenStarted(tc => tc.Listen());                         //4
+                    s.WhenStopped(tc => tc.Dispose());                          //5
+
+                });
+
+                x.EnableServiceRecovery(r =>
+                {
+                    r.RestartService(0);
+                });
+
+                x.RunAsLocalSystem();                                       //6
+                x.StartAutomatically();
+
+
+                //x.SetDescription("Sample Topshelf Host");                   //7
+                x.SetDisplayName("Beltzac DNS");                                  //8
+                x.SetServiceName("Beltzac DNS");                                  //9
+            });                                                             //10
+
+            var exitCode = (int)Convert.ChangeType(rc, rc.GetTypeCode());  //11
+            Environment.ExitCode = exitCode;
 
             //// Resolve these domain to localhost
             //masterFile.AddIPAddressResourceRecord("google.com", "127.0.0.1");
             //masterFile.AddIPAddressResourceRecord("github.com", "127.0.0.1");
 
-            // Log every request
-            server.Requested += (sender, e) =>
-            {
-                //Console.WriteLine();
-            };
-            // On every successful request log the request and the response
-            //server.Responded += (sender, e) =>
+            //// Log every request
+            //server.Requested += (sender, e) =>
             //{
-                
-            //    //Console.WriteLine("{0} => {1}", e.Request?.Questions?.FirstOrDefault()?.Name, (e.Response?.AnswerRecords?.FirstOrDefault(a => a is IPAddressResourceRecord) as IPAddressResourceRecord)?.IPAddress);
+            //    //Console.WriteLine();
             //};
-            // Log errors
-            server.Errored += (sender, e) => Console.WriteLine(e.Exception.Message);
+            //// On every successful request log the request and the response
+            ////server.Responded += (sender, e) =>
+            ////{
 
-            // Start the server (by default it listens on port 53)
-            //await server.Listen(53553);
-            await server.Listen();
+            ////    //Console.WriteLine("{0} => {1}", e.Request?.Questions?.FirstOrDefault()?.Name, (e.Response?.AnswerRecords?.FirstOrDefault(a => a is IPAddressResourceRecord) as IPAddressResourceRecord)?.IPAddress);
+            ////};
+            //// Log errors
+            //server.Errored += (sender, e) => Console.WriteLine(e.Exception.Message);
 
-           // Console.WriteLine("Hello World!");
+            //// Start the server (by default it listens on port 53)
+            ////await server.Listen(53553);
+            //await server.Listen();
+
+            // Console.WriteLine("Hello World!");
         }
 
         class IPAddressConverter : JsonConverter
@@ -1936,8 +1965,8 @@ namespace beltzac.dns
                     //    Console.WriteLine("Cache HIT! => " + q.Name.ToString());
                     //    return cached;
                     //}
-                    
-                    
+
+
                     //var cache = db.StringGet(q.Name.ToString());
                     //if (cache.HasValue)
                     //{
@@ -1954,9 +1983,9 @@ namespace beltzac.dns
                     _memoryCache.Set(chave, result);
 
                     // db.StringSet(q.Name.ToString(), JsonConvert.SerializeObject(result, settings));
-                        //Console.WriteLine(q.Name.ToString());
-                        //Console.WriteLine(r.ToString());
-              
+                    //Console.WriteLine(q.Name.ToString());
+                    //Console.WriteLine(r.ToString());
+
 
 
 
@@ -2028,9 +2057,9 @@ namespace beltzac.dns
                 //sw.Stop();
 
                 Console.WriteLine($"# FastestResolver @{((ILoggedResolver)fastest.Item1).getDns()} => {request.Questions.First().Name} => {((ILoggedResolver)fastest.Item1).getTime()}");
-         
 
-                return  fastest.Item2;
+
+                return fastest.Item2;
             }
 
             async Task<(IRequestResolver, IResponse)> processAsync(IRequest request, IRequestResolver resolver)
@@ -2063,7 +2092,7 @@ namespace beltzac.dns
 
             public long getMeanTime()
             {
-                if(time.Count == 0) return 0;
+                if (time.Count == 0) return 0;
                 return (long)time.Average();
             }
 
@@ -2075,7 +2104,7 @@ namespace beltzac.dns
 
             public async Task<IResponse> Resolve(IRequest request, CancellationToken cancellationToken = default)
             {
-                
+
                 Stopwatch sw = Stopwatch.StartNew();
 
                 IResponse response = await res.Resolve(request);
@@ -2084,7 +2113,7 @@ namespace beltzac.dns
 
                 time.Enqueue(sw.ElapsedMilliseconds);
 
-                if(time.Count > 100)
+                if (time.Count > 100)
                 {
                     time.TryDequeue(out _);
                 }
